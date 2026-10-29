@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sealed Orders</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: one ledger column. Rain-grey ground; each Fixer's chosen color is the only loud thing on the page. */
+:root {
+  color-scheme: light;
+  --bg: #e8ebed;
+  --surface: #f5f6f7;
+  --fg: #192026;
+  --muted: #566570;
+  --line: #c4ccd2;
+  --rain: rgba(25, 32, 38, 0.05);
+  --accent: #7a5a18;
+  --accent-fg: #ffffff;
+  --danger: #8e2c2c;
+  --display: "Spectral", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #10151a;
+    --surface: #1a2127;
+    --fg: #e6e9ec;
+    --muted: #9aa6b0;
+    --line: #2d3740;
+    --rain: rgba(230, 233, 236, 0.045);
+    --accent: #d2a64c;
+    --accent-fg: #17110a;
+    --danger: #e58a8a;
+  }
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(105deg, transparent 0 26px, var(--rain) 26px 27px);
+  color: var(--fg);
+  font: 17px/1.5 var(--display);
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { margin: 0; font: 500 12px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: clamp(2rem, 7vw, 2.8rem); line-height: 1.05; font-weight: 600; text-wrap: balance; }
+h2 { margin: 0; font-size: 1.4rem; line-height: 1.2; font-weight: 600; text-wrap: balance; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px; display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.notice { border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; font-size: 15px; background: var(--surface); }
+.lead { margin: 0; color: var(--muted); }
+.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.choice {
+  font: inherit; text-align: left; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 22px 20px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.choice:hover:not(:disabled) { border-color: var(--accent); }
+.choice:disabled { opacity: 0.55; cursor: default; }
+.choice .big { font-size: 1.6rem; font-weight: 600; line-height: 1.1; }
+.choice .small { font-size: 14px; color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.field label, .legend { font: 500 12px/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+select, input[type="text"] {
+  width: 100%; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0;
+}
+select:disabled, input:disabled { opacity: 0.55; }
+input.codefield { font-family: var(--mono); letter-spacing: 0.2em; text-transform: uppercase; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { position: relative; }
+.swatch input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.swatch span { display: block; width: 36px; height: 36px; border-radius: 50%; background: var(--c); border: 2px solid var(--line); }
+.swatch input:checked + span { outline: 3px solid var(--fg); outline-offset: 2px; }
+.swatch input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn {
+  font: 500 14px/1 var(--mono); letter-spacing: 0.04em; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.quiet { font-size: 12px; padding: 9px 12px; color: var(--muted); }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.row.between { justify-content: space-between; }
+.msg { margin: 0; min-height: 1.2em; font-size: 15px; color: var(--danger); }
+.hint { margin: 0; font-size: 14px; color: var(--muted); }
+.roundbar { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+.roundnum { font: 500 clamp(1.6rem, 6vw, 2.2rem)/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.count { font: 500 14px/1 var(--mono); color: var(--muted); }
+.invite { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 8px; }
+.code { font: 500 clamp(1.6rem, 6vw, 2.2rem)/1 var(--mono); letter-spacing: 0.25em; }
+.invite input { font-family: var(--mono); font-size: 13px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--bg); border: 1px solid var(--line); border-left: 8px solid var(--pc, var(--line)); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card .name { font-size: 1.25rem; font-weight: 600; overflow-wrap: anywhere; }
+.card .gear { font: 400 12px/1.5 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.orders { display: flex; flex-direction: column; gap: 4px; font: 400 14px/1.5 var(--mono); overflow-wrap: anywhere; }
+.orders b { font-weight: 500; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; margin-right: 8px; }
+.orders.waiting { color: var(--muted); font-style: italic; font-family: var(--display); font-size: 15px; }
+.empty { margin: 0; color: var(--muted); font-style: italic; }
+.waitbox { text-align: center; padding: 36px 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.foot { margin-top: 28px; display: flex; justify-content: flex-end; }
+.me { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--muted); }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); border: 1px solid var(--line); flex: none; }
+@media (max-width: 560px) {
+  .choices, .grid2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .choice { transition: border-color 0.15s ease; }
+  .pulse { animation: breathe 2.2s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Fixers of Ashenspire</p>
+    <h1>Sealed Orders</h1>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <!-- Landing -->
+  <section class="panel" id="v-landing" aria-label="Choose your role">
+    <p class="lead">Players send their action and bonus action in secret, round by round. Only the DM sees them.</p>
+    <div class="choices">
+      <button class="choice" id="btnDM" type="button"><span class="big">DM</span><span class="small">Open a room and run the fight</span></button>
+      <button class="choice" id="btnPlayer" type="button"><span class="big">Player</span><span class="small">Join the DM's room</span></button>
+    </div>
+    <p class="msg" id="landMsg" role="alert"></p>
+  </section>
+
+  <!-- Player: join form -->
+  <section class="panel" id="v-playerForm" hidden aria-label="Join the room">
+    <h2>Your Fixer</h2>
+    <form id="joinForm" autocomplete="off">
+      <div style="display: flex; flex-direction: column; gap: 18px">
+        <div class="field">
+          <label for="pCode">Room code</label>
+          <input type="text" id="pCode" class="codefield" maxlength="6" autocapitalize="characters" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="pName">Name</label>
+          <input type="text" id="pName" maxlength="30">
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="pClass">Class</label><select id="pClass"></select></div>
+          <div class="field"><label for="pArmor">Armor type</label><select id="pArmor"></select></div>
+          <div class="field"><label for="pWeapon">Weapon</label><select id="pWeapon"></select></div>
+          <div class="field"><label for="pClan">Clan</label><select id="pClan"></select></div>
+        </div>
+        <fieldset class="field">
+          <legend class="legend">Color</legend>
+          <div class="swatches" id="swatches"></div>
+        </fieldset>
+        <div class="row">
+          <button class="btn primary" type="submit" id="joinBtn">Join the room</button>
+          <button class="btn quiet" type="button" id="formBack">Back</button>
+        </div>
+        <p class="msg" id="joinMsg" role="alert"></p>
+      </div>
+    </form>
+  </section>
+
+  <!-- Player: waiting -->
+  <section class="panel" id="v-playerWait" hidden aria-label="Waiting for the fight">
+    <div class="row between">
+      <div class="me"><span class="dot" id="waitDot"></span><span id="waitWho"></span></div>
+      <button class="btn quiet" type="button" id="leaveWait">Leave room</button>
+    </div>
+    <div class="waitbox">
+      <span class="pulse"></span>
+      <h2>Connected to the DM's room</h2>
+      <p class="hint">This screen stays blank until the next fight starts.</p>
+    </div>
+  </section>
+
+  <!-- Player: fight -->
+  <section class="panel" id="v-playerFight" hidden aria-label="Your orders">
+    <div class="row between">
+      <div class="me"><span class="dot" id="fightDot"></span><span id="fightWho"></span></div>
+      <button class="btn quiet" type="button" id="leaveFight">Leave room</button>
+    </div>
+    <div class="roundbar"><span class="roundnum">Round <span id="pRound">1</span></span></div>
+    <form id="orderForm" autocomplete="off">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <div class="field">
+          <label for="oAction">Action</label>
+          <input type="text" id="oAction" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="oBonus">Bonus action</label>
+          <input type="text" id="oBonus" maxlength="120">
+        </div>
+        <div class="row">
+          <button class="btn primary" type="submit" id="sendBtn">Seal orders</button>
+          <span class="hint" id="sentHint">Only the DM can read these.</span>
+        </div>
+        <p class="msg" id="orderMsg" role="alert"></p>
+      </div>
+    </form>
+  </section>
+
+  <!-- DM: lobby -->
+  <section class="panel" id="v-dmLobby" hidden aria-label="Room lobby">
+    <div class="invite">
+      <span class="eyebrow">Room code</span>
+      <span class="code" id="roomCode"></span>
+      <div class="row">
+        <input type="text" id="inviteLink" readonly aria-label="Invite link" style="flex: 1 1 220px">
+        <button class="btn" type="button" id="copyInvite">Copy invite link</button>
+      </div>
+      <p class="hint" id="copyMsg" role="status">Send the link to your players. It fills in the room code for them.</p>
+    </div>
+    <div class="roundbar">
+      <h2>Waiting for the fight</h2>
+      <span class="count" id="lobbyCount">0 connected</span>
+    </div>
+    <div class="cards" id="lobbyCards"></div>
+    <div class="row">
+      <button class="btn primary" id="startBtn" type="button">Start fight</button>
+      <span class="hint">Everyone stays connected between fights.</span>
+    </div>
+    <div class="foot"><button class="btn quiet" id="closeRoom" type="button">Close room</button></div>
+  </section>
+
+  <!-- DM: fight -->
+  <section class="panel" id="v-dmFight" hidden aria-label="Fight">
+    <div class="roundbar">
+      <span class="roundnum">Round <span id="dRound">1</span></span>
+      <span class="count" id="sentCount">0 of 0 sent</span>
+    </div>
+    <div class="cards" id="fightCards"></div>
+    <div class="row">
+      <button class="btn primary" id="nextBtn" type="button">Next round</button>
+    </div>
+    <div class="foot"><button class="btn quiet danger" id="endBtn" type="button">End fight</button></div>
+  </section>
+</div>
+
+<!--
+  SETUP: paste the two values from your Supabase project here (Project Settings > API).
+  The "anon" key is meant to be public. The database rules in setup.sql are what keep orders secret.
+-->
+<script>
+window.FIXERS_CONFIG = {
+  url: "sb_publishable_g0BRX0Pi3LES1QsT5xwuYw_xNdOHoN-",
+  key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjd3V5bGpiZmxqZmNkeHFnZG5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNDIyMjksImV4cCI6MjEwODgxODIyOX0.0AU38tJYCpGokiJz4Zj0i6HCECGaP7YiSKbsHkUY0Ak"
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Backend (Supabase). Tests may inject window.FIXERS_BACKEND. ---------- */
+  var CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function randomCode() {
+    var out = "", buf = new Uint8Array(6);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    for (var i = 0; i < 6; i++) out += CODE_CHARS.charAt(buf[i] % CODE_CHARS.length);
+    return out;
+  }
+
+  function makeSupabaseBackend(cfg) {
+    var sb = window.supabase.createClient(cfg.url, cfg.key);
+    var uid = null;
+    function check(res) { if (res.error) throw res.error; return res.data; }
+    return {
+      async init() {
+        var s = await sb.auth.getSession();
+        var session = s.data && s.data.session;
+        if (!session) {
+          var r = await sb.auth.signInAnonymously();
+          if (r.error) throw r.error;
+          session = r.data.session;
+        }
+        uid = session.user.id;
+        return uid;
+      },
+      async createRoom() {
+        for (var i = 0; i < 6; i++) {
+          var res = await sb.from("rooms").insert({ code: randomCode() }).select().single();
+          if (!res.error) return res.data;
+          if (res.error.code !== "23505") throw res.error;
+        }
+        throw new Error("Could not make a room code. Try again.");
+      },
+      async getRoom(id) { return check(await sb.from("rooms").select("*").eq("id", id).maybeSingle()); },
+      async getRoomByCode(code) { return check(await sb.from("rooms").select("*").eq("code", code).maybeSingle()); },
+      async setRoom(id, patch) { return check(await sb.from("rooms").update(patch).eq("id", id).select().single()); },
+      async listPlayers(roomId) { return check(await sb.from("players").select("*").eq("room_id", roomId).order("joined_at")); },
+      async getMyPlayer(roomId) { return check(await sb.from("players").select("*").eq("room_id", roomId).eq("user_id", uid).maybeSingle()); },
+      async joinRoom(roomId, fields) {
+        var row = Object.assign({ room_id: roomId, user_id: uid, f: 0, round: 0, action: "", bonus: "" }, fields);
+        return check(await sb.from("players").upsert(row, { onConflict: "room_id,user_id" }).select().single());
+      },
+      async updateMyOrders(roomId, patch) {
+        return check(await sb.from("players").update(patch).eq("room_id", roomId).eq("user_id", uid).select().single());
+      },
+      async leave(roomId) { check(await sb.from("players").delete().eq("room_id", roomId).eq("user_id", uid)); },
+      subscribe(roomId, onPing) {
+        var ch = sb.channel("room-" + roomId)
+          .on("postgres_changes", { event: "*", schema: "public", table: "rooms", filter: "id=eq." + roomId }, onPing)
+          .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: "room_id=eq." + roomId }, onPing)
+          .subscribe();
+        return function () { try { sb.removeChannel(ch); } catch (e) { /* already gone */ } };
+      }
+    };
+  }
+
+  var cfg = window.FIXERS_CONFIG || {};
+  var configured = cfg.url && cfg.key && cfg.url.indexOf("PASTE_") !== 0 && cfg.key.indexOf("PASTE_") !== 0;
+  var backend = window.FIXERS_BACKEND || (configured && window.supabase ? makeSupabaseBackend(cfg) : null);
+  var POLL_MS = window.FIXERS_POLL_MS || 3000;
+
+  /* ---------- Static data ---------- */
+  var COLORS = [
+    { n: "Crimson", c: "#c0392b" }, { n: "Amber", c: "#e08a1e" }, { n: "Gold", c: "#d4b13a" },
+    { n: "Moss", c: "#6a994e" }, { n: "Teal", c: "#1f9a8a" }, { n: "Azure", c: "#3b82c4" },
+    { n: "Violet", c: "#8e5bd0" }, { n: "Rose", c: "#d9609a" }, { n: "Slate", c: "#6b7d8c" }, { n: "Bone", c: "#cfc8b8" }
+  ];
+  var CLASSES = {
+    "Wildcard": ["Sword", "Axe", "Spear", "War Hammer", "Mace", "Bow", "Warscythe", "Rapier", "Greataxe"],
+    "Commander": ["Sword", "Rapier", "Whip", "Mace", "Spear"],
+    "Juggernaut": ["Greatsword", "War Hammer", "Greataxe", "Spear", "Warscythe"],
+    "Musketeer": ["Musket"]
+  };
+  var ARMORS = ["Light", "Medium", "Heavy"];
+  var CLANS = ["House Niremada", "The Soulsisters", "The Blackats", "The Ashen Oath", "The Ledger", "Lone wolf"];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var VIEWS = ["landing", "playerForm", "playerWait", "playerFight", "dmLobby", "dmFight"];
+
+  /* ---------- State ---------- */
+  var ready = false, problem = "";
+  var role = null;              // "dm" | "player" | null
+  var room = null;              // current room row
+  var players = [];             // DM only: everyone in the room
+  var my = null;                // player only: my own row
+  var busy = false, formOpen = false;
+  var unsub = null, pollTimer = null, refreshing = false, again = false, pingTimer = null;
+  var lastKey = null, endArmed = false, endTimer = null, closeArmed = false, closeTimer = null;
+
+  function saveSession() {
+    try { localStorage.setItem("sealed-orders-session", role && room ? JSON.stringify({ role: role, roomId: room.id }) : ""); }
+    catch (e) { /* storage may be blocked */ }
+  }
+  function loadSession() {
+    try { var raw = localStorage.getItem("sealed-orders-session"); return raw ? JSON.parse(raw) : null; }
+    catch (e) { return null; }
+  }
+
+  /* ---------- Form setup (every field starts empty) ---------- */
+  function fill(sel, items) {
+    sel.textContent = "";
+    var blank = document.createElement("option");
+    blank.value = ""; blank.textContent = ""; sel.appendChild(blank);
+    items.forEach(function (t) { var o = document.createElement("option"); o.value = t; o.textContent = t; sel.appendChild(o); });
+    sel.value = "";
+  }
+  fill($("pClass"), Object.keys(CLASSES));
+  fill($("pArmor"), ARMORS);
+  fill($("pClan"), CLANS);
+  fill($("pWeapon"), []);
+  $("pClass").addEventListener("change", function () {
+    var c = $("pClass").value;
+    fill($("pWeapon"), c ? CLASSES[c] : []);
+  });
+  COLORS.forEach(function (col, i) {
+    var lab = document.createElement("label");
+    lab.className = "swatch";
+    lab.style.setProperty("--c", col.c);
+    var inp = document.createElement("input");
+    inp.type = "radio"; inp.name = "pColor"; inp.value = col.c; inp.id = "color" + i;
+    inp.setAttribute("aria-label", col.n);
+    var sp = document.createElement("span");
+    lab.appendChild(inp); lab.appendChild(sp);
+    $("swatches").appendChild(lab);
+  });
+
+  // An invite link carries the room code after the # sign. It only fills the code box.
+  (function prefillCode() {
+    var h = (location.hash || "").replace(/^#/, "").toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(h)) $("pCode").value = h;
+  })();
+
+  /* ---------- Views ---------- */
+  function currentView() {
+    if (role === "dm" && room) {
+      if (room.phase === "lobby") return "dmLobby";
+      if (room.phase === "fight") return "dmFight";
+    }
+    if (role === "player" && room && my) return room.phase === "fight" ? "playerFight" : "playerWait";
+    return (role === null && formOpen) ? "playerForm" : "landing";
+  }
+
+  function gearLine(p) {
+    return [p.cls, (p.armor || "") + " armor", p.weapon, p.clan].filter(Boolean).join(" · ");
+  }
+  function sentThisRound(p) {
+    return p.f === room.f && p.round === room.round && (p.action || p.bonus);
+  }
+
+  function makeCard(p, showOrders) {
+    var el = document.createElement("div");
+    el.className = "card";
+    el.style.setProperty("--pc", p.color || "var(--line)");
+    var nm = document.createElement("div"); nm.className = "name"; nm.textContent = p.name || "Unnamed";
+    var g = document.createElement("div"); g.className = "gear"; g.textContent = gearLine(p);
+    el.appendChild(nm); el.appendChild(g);
+    if (showOrders) {
+      var o = document.createElement("div");
+      if (sentThisRound(p)) {
+        o.className = "orders";
+        var a = document.createElement("div"); var ab = document.createElement("b"); ab.textContent = "Action";
+        a.appendChild(ab); a.appendChild(document.createTextNode(p.action || "(none)"));
+        var b = document.createElement("div"); var bb = document.createElement("b"); bb.textContent = "Bonus";
+        b.appendChild(bb); b.appendChild(document.createTextNode(p.bonus || "(none)"));
+        o.appendChild(a); o.appendChild(b);
+      } else {
+        o.className = "orders waiting"; o.textContent = "Waiting for orders…";
+      }
+      el.appendChild(o);
+    }
+    return el;
+  }
+
+  function inviteUrl() {
+    return location.href.split("#")[0] + "#" + room.code;
+  }
+
+  function render() {
+    var view = currentView();
+    VIEWS.forEach(function (v) { $("v-" + v).hidden = v !== view; });
+
+    var live = ready && backend;
+    $("btnPlayer").disabled = !live;
+    $("btnDM").disabled = !live;
+    var text = problem;
+    if (!text && !backend) text = "This site is not connected to its database yet. The host needs to finish setup (see SETUP in index.html).";
+    $("notice").hidden = !text;
+    $("notice").textContent = text;
+
+    if (view === "dmLobby") {
+      $("roomCode").textContent = room.code;
+      $("inviteLink").value = inviteUrl();
+      $("lobbyCount").textContent = players.length + " connected";
+      var lc = $("lobbyCards"); lc.textContent = "";
+      if (!players.length) {
+        var e = document.createElement("p"); e.className = "empty"; e.textContent = "No one has joined yet.";
+        lc.appendChild(e);
+      }
+      players.forEach(function (p) { lc.appendChild(makeCard(p, false)); });
+      $("startBtn").disabled = busy;
+      $("closeRoom").textContent = closeArmed ? "Click again to close the room" : "Close room";
+    }
+
+    if (view === "dmFight") {
+      $("dRound").textContent = String(room.round);
+      var sentN = players.filter(sentThisRound).length;
+      $("sentCount").textContent = sentN + " of " + players.length + " sent";
+      var fc = $("fightCards"); fc.textContent = "";
+      if (!players.length) {
+        var e2 = document.createElement("p"); e2.className = "empty"; e2.textContent = "No players are connected.";
+        fc.appendChild(e2);
+      }
+      players.forEach(function (p) { fc.appendChild(makeCard(p, true)); });
+      $("nextBtn").disabled = busy;
+      $("endBtn").textContent = endArmed ? "Click again to end the fight" : "End fight";
+    }
+
+    if (view === "playerWait" || view === "playerFight") {
+      $("waitWho").textContent = my.name; $("fightWho").textContent = my.name;
+      $("waitDot").style.setProperty("--pc", my.color); $("fightDot").style.setProperty("--pc", my.color);
+    }
+
+    if (view === "playerFight") {
+      $("pRound").textContent = String(room.round);
+      var key = room.f + ":" + room.round;
+      if (lastKey !== key) {
+        $("oAction").value = ""; $("oBonus").value = ""; $("orderMsg").textContent = "";
+        lastKey = key;
+      }
+      var sentNow = my.f === room.f && my.round === room.round && (my.action || my.bonus);
+      $("sendBtn").textContent = sentNow ? "Change orders" : "Seal orders";
+      $("sendBtn").disabled = busy;
+      $("sentHint").textContent = sentNow ? "Orders sealed for this round. You can change them until the DM moves on." : "Only the DM can read these.";
+      if (sentNow && !$("oAction").value && !$("oBonus").value) {
+        $("oAction").value = my.action || ""; $("oBonus").value = my.bonus || "";
+      }
+    } else {
+      lastKey = null;
+    }
+  }
+
+  /* ---------- Room lifecycle ---------- */
+  function errText(e) {
+    var m = (e && (e.message || e.error_description)) || "unknown error";
+    return "Something went wrong: " + m;
+  }
+
+  function stopWatching() {
+    if (unsub) { try { unsub(); } catch (e) { /* ignore */ } unsub = null; }
+    clearInterval(pollTimer); pollTimer = null;
+    clearTimeout(pingTimer); pingTimer = null;
+  }
+
+  function pingSoon() {
+    clearTimeout(pingTimer);
+    pingTimer = setTimeout(refresh, 120);
+  }
+
+  function enterRoom(newRoom, newRole) {
+    stopWatching();
+    room = newRoom; role = newRole; formOpen = false;
+    try { unsub = backend.subscribe(room.id, pingSoon); } catch (e) { unsub = null; }
+    pollTimer = setInterval(refresh, POLL_MS);
+    saveSession();
+    render();
+  }
+
+  function leaveRoomState(message) {
+    stopWatching();
+    role = null; room = null; my = null; players = []; formOpen = false; lastKey = null;
+    $("landMsg").textContent = message || "";
+    saveSession();
+    render();
+  }
+
+  async function refresh() {
+    if (!room || !backend) return;
+    if (refreshing) { again = true; return; }
+    refreshing = true;
+    var rid = room.id;
+    try {
+      var r = await backend.getRoom(rid);
+      if (!room || room.id !== rid) { refreshing = false; return; }
+      if (!r || r.phase === "closed") {
+        refreshing = false;
+        leaveRoomState(role === "player" ? "The DM closed the room." : "");
+        return;
+      }
+      room = r;
+      if (role === "dm") {
+        players = await backend.listPlayers(rid);
+      } else {
+        var mine = await backend.getMyPlayer(rid);
+        if (!room || room.id !== rid) { refreshing = false; return; }
+        if (!mine) { refreshing = false; leaveRoomState("You are no longer in that room."); return; }
+        my = mine;
+      }
+      if (room && room.id === rid) problem = "";
+    } catch (e) {
+      problem = "Connection problem. Retrying…";
+    }
+    refreshing = false;
+    render();
+    if (again) { again = false; refresh(); }
+  }
+
+  /* ---------- Landing ---------- */
+  $("btnPlayer").addEventListener("click", function () { $("landMsg").textContent = ""; formOpen = true; render(); });
+  $("formBack").addEventListener("click", function () { formOpen = false; render(); });
+
+  $("btnDM").addEventListener("click", async function () {
+    if (!backend || busy) return;
+    $("landMsg").textContent = "";
+    busy = true; render();
+    try {
+      var r = await backend.createRoom();
+      players = [];
+      enterRoom(r, "dm");
+    } catch (e) { $("landMsg").textContent = errText(e); }
+    busy = false; render();
+  });
+
+  /* ---------- Player: join ---------- */
+  $("joinForm").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    if (!backend || busy) return;
+    var code = $("pCode").value.trim().toUpperCase();
+    var name = $("pName").value.trim();
+    var cls = $("pClass").value, armor = $("pArmor").value, weapon = $("pWeapon").value, clan = $("pClan").value;
+    var picked = document.querySelector("input[name=pColor]:checked");
+    var msg = $("joinMsg");
+    if (!code) { msg.textContent = "Enter the room code."; return; }
+    if (!name) { msg.textContent = "Enter your Fixer's name."; return; }
+    if (!cls) { msg.textContent = "Choose a class."; return; }
+    if (!armor) { msg.textContent = "Choose an armor type."; return; }
+    if (!weapon) { msg.textContent = "Choose a weapon."; return; }
+    if (!clan) { msg.textContent = "Choose a clan."; return; }
+    if (!picked) { msg.textContent = "Choose a color."; return; }
+    msg.textContent = "";
+    busy = true; $("joinBtn").disabled = true;
+    try {
+      var r = await backend.getRoomByCode(code);
+      if (!r) { msg.textContent = "No room has that code. Check it with your DM."; }
+      else if (r.phase === "closed") { msg.textContent = "That room is closed."; }
+      else {
+        var row = await backend.joinRoom(r.id, { name: name, cls: cls, armor: armor, weapon: weapon, clan: clan, color: picked.value });
+        my = row;
+        enterRoom(r, "player");
+      }
+    } catch (e) { msg.textContent = errText(e); }
+    busy = false; $("joinBtn").disabled = false; render();
+  });
+
+  async function leave() {
+    var rid = room && room.id;
+    leaveRoomState("");
+    if (rid && backend) { try { await backend.leave(rid); } catch (e) { /* the DM can remove stale rows */ } }
+  }
+  $("leaveWait").addEventListener("click", leave);
+  $("leaveFight").addEventListener("click", leave);
+
+  /* ---------- Player: orders ---------- */
+  $("orderForm").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    if (!backend || busy || !room || !my) return;
+    var action = $("oAction").value.trim(), bonus = $("oBonus").value.trim();
+    if (!action && !bonus) { $("orderMsg").textContent = "Type an action or a bonus action."; return; }
+    $("orderMsg").textContent = "";
+    busy = true; render();
+    try {
+      my = await backend.updateMyOrders(room.id, { f: room.f, round: room.round, action: action, bonus: bonus });
+    } catch (e) { $("orderMsg").textContent = errText(e); }
+    busy = false; render();
+  });
+
+  /* ---------- DM controls ---------- */
+  async function setRoom(patch) {
+    if (!backend || busy || !room) return;
+    busy = true; render();
+    try { room = await backend.setRoom(room.id, patch); problem = ""; }
+    catch (e) { problem = errText(e); }
+    busy = false; render();
+  }
+  $("startBtn").addEventListener("click", function () { setRoom({ phase: "fight", round: 1, f: room.f + 1 }); });
+  $("nextBtn").addEventListener("click", function () { setRoom({ phase: "fight", round: room.round + 1 }); });
+
+  // End fight goes back to the waiting lobby. Everyone stays connected.
+  function endFight() { setRoom({ phase: "lobby", round: 0 }); }
+  $("endBtn").addEventListener("click", function () {
+    if (!endArmed) {
+      endArmed = true; render();
+      clearTimeout(endTimer);
+      endTimer = setTimeout(function () { endArmed = false; render(); }, 4000);
+      return;
+    }
+    clearTimeout(endTimer); endArmed = false;
+    endFight();
+  });
+
+  // Close room is the only thing that sends everyone back to the first screen.
+  async function closeRoom() {
+    if (!backend || busy || !room) return;
+    busy = true; render();
+    try { await backend.setRoom(room.id, { phase: "closed" }); leaveRoomState(""); }
+    catch (e) { problem = errText(e); }
+    busy = false; render();
+  }
+  $("closeRoom").addEventListener("click", function () {
+    if (!closeArmed) {
+      closeArmed = true; render();
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(function () { closeArmed = false; render(); }, 4000);
+      return;
+    }
+    clearTimeout(closeTimer); closeArmed = false;
+    closeRoom();
+  });
+
+  $("copyInvite").addEventListener("click", async function () {
+    var out = $("copyMsg");
+    try { await navigator.clipboard.writeText(inviteUrl()); out.textContent = "Invite link copied."; }
+    catch (e) { $("inviteLink").select(); out.textContent = "Select the link above and copy it."; }
+  });
+
+  /* ---------- Start ---------- */
+  async function init() {
+    if (!backend) { ready = true; render(); return; }
+    try {
+      await backend.init();
+    } catch (e) {
+      problem = "Could not connect. If you are the host, check the setup steps. " + errText(e);
+      ready = true; render(); return;
+    }
+    ready = true;
+
+    // Pick up where this browser left off (a refresh, or a phone that reloaded the page).
+    var saved = loadSession();
+    if (saved && saved.roomId) {
+      try {
+        var r = await backend.getRoom(saved.roomId);
+        if (r && r.phase !== "closed") {
+          if (saved.role === "dm") {
+            players = await backend.listPlayers(r.id);
+            enterRoom(r, "dm");
+          } else {
+            var mine = await backend.getMyPlayer(r.id);
+            if (mine) { my = mine; enterRoom(r, "player"); }
+          }
+        }
+      } catch (e) { /* start fresh at the landing screen */ }
+    }
+    render();
+  }
+
+  render();
+  init();
+})();
+</script>
+</body>
+</html>
