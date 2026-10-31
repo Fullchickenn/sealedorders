@@ -139,8 +139,8 @@ input.codefield { font-family: var(--mono); letter-spacing: 0.2em; text-transfor
   <section class="panel" id="v-landing" aria-label="Choose your role">
     <p class="lead">Players send their action and bonus action in secret, round by round. Only the DM sees them.</p>
     <div class="choices">
-      <button class="choice" id="btnDM" type="button"><span class="big">DM</span><span class="small">Open a room and run the fight</span></button>
-      <button class="choice" id="btnPlayer" type="button"><span class="big">Player</span><span class="small">Join the DM's room</span></button>
+      <button class="choice" id="btnDM" type="button" disabled><span class="big">DM</span><span class="small">Open a room and run the fight</span></button>
+      <button class="choice" id="btnPlayer" type="button" disabled><span class="big">Player</span><span class="small">Join the DM's room</span></button>
     </div>
     <p class="msg" id="landMsg" role="alert"></p>
   </section>
@@ -259,9 +259,22 @@ input.codefield { font-family: var(--mono); letter-spacing: 0.2em; text-transfor
 -->
 <script>
 window.FIXERS_CONFIG = {
-  url: "sb_publishable_g0BRX0Pi3LES1QsT5xwuYw_xNdOHoN-",
+  url: "https://ecwuyljbfljfcdxqgdnc.supabase.co/rest/v1/",
   key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjd3V5bGpiZmxqZmNkeHFnZG5jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNDIyMjksImV4cCI6MjEwODgxODIyOX0.0AU38tJYCpGokiJz4Zj0i6HCECGaP7YiSKbsHkUY0Ak"
 };
+</script>
+<script>
+// If anything on this page breaks, say so on screen instead of failing silently.
+window.addEventListener("error", function (e) {
+  var n = document.getElementById("notice");
+  if (!n) return;
+  n.hidden = false;
+  if (e.target && e.target.tagName === "SCRIPT") {
+    n.textContent = "Could not load the database library. Check your connection, or turn off any ad blocker for this site, then reload.";
+  } else {
+    n.textContent = "The page hit an error: " + (e.message || "unknown") + ". If you are the host, check the two values in index.html.";
+  }
+}, true);
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
@@ -324,9 +337,23 @@ window.FIXERS_CONFIG = {
     };
   }
 
+  // Tidy what the host pasted: strip spaces and quotes, add https:// if it is missing, drop any path.
   var cfg = window.FIXERS_CONFIG || {};
-  var configured = cfg.url && cfg.key && cfg.url.indexOf("PASTE_") !== 0 && cfg.key.indexOf("PASTE_") !== 0;
-  var backend = window.FIXERS_BACKEND || (configured && window.supabase ? makeSupabaseBackend(cfg) : null);
+  var cfgUrl = String(cfg.url || "").trim().replace(/^["']+|["']+$/g, "").trim();
+  var cfgKey = String(cfg.key || "").trim().replace(/^["']+|["']+$/g, "").trim();
+  if (cfgUrl && !/^https?:\/\//i.test(cfgUrl)) cfgUrl = "https://" + cfgUrl;
+  try { cfgUrl = new URL(cfgUrl).origin; } catch (e) { /* left as typed; the error is shown below */ }
+  var configured = cfgUrl && cfgKey && cfgUrl.indexOf("PASTE_") < 0 && cfgKey.indexOf("PASTE_") < 0;
+
+  var backend = window.FIXERS_BACKEND || null, configError = "";
+  if (!backend && configured) {
+    if (!window.supabase) {
+      configError = "Could not load the database library. Check your connection, or turn off any ad blocker for this site, then reload.";
+    } else {
+      try { backend = makeSupabaseBackend({ url: cfgUrl, key: cfgKey }); }
+      catch (e) { configError = "The Project URL or key in index.html looks wrong (" + e.message + "). The URL should look like https://abcdefgh.supabase.co."; }
+    }
+  }
   var POLL_MS = window.FIXERS_POLL_MS || 3000;
 
   /* ---------- Static data ---------- */
@@ -453,7 +480,7 @@ window.FIXERS_CONFIG = {
     $("btnPlayer").disabled = !live;
     $("btnDM").disabled = !live;
     var text = problem;
-    if (!text && !backend) text = "This site is not connected to its database yet. The host needs to finish setup (see SETUP in index.html).";
+    if (!text && !backend) text = configError || "This site is not connected to its database yet. The host needs to finish setup (see SETUP in index.html).";
     $("notice").hidden = !text;
     $("notice").textContent = text;
 
